@@ -3,9 +3,10 @@
 apod.py
 
 written by Kyle Isom <coder@kyleisom.net>
+modified by Trafficone
 
 fetched NASA APOD. Usage:
-    apod.py [optional directory]
+    apod.py [-p optional directory] [-s]
 
 unless specified, the script downloads images to ~/Pictures/apod; the
 storage directory may be specified on the command line.
@@ -18,7 +19,6 @@ import re
 import sys
 import urllib2
 import shutil
-
 
 ########################
 # function definitions #
@@ -46,17 +46,11 @@ def url_open(url_str):
 
 def set_background(image_path):
     """
-    Attempt to set the desktop image for the system.
-
-    Currently only OS X is supported and is likely to be the only system
-    supported. 
-        - I don't have any windows systems to use / test the code on
-        - there are too many possible choices for linux desktop systems and
-        therefore too many desktop-setting mechanisms.
+    Attempt to set the desktop image for the system. See the README for 
+    supported file types.
     """
     platform = sys.platform
     err      = sys.stderr.write
-    print "I am setting the wallpaper!"
     if "win32" == platform:
         try:
             import ctypes
@@ -198,6 +192,7 @@ base_img    = '.+/(\\w+)\\.([a-z]{3,4})'
 #             form $1 + '_date' + $2 where date is in the form yyyymmdd.
 # temp_f: file descriptor for the temporary file the image is download as
 #         the file is later moved to store_dir/image_name
+# temp_filename: file name of the temporary file - used when copying out
 if 'win32' == sys.platform:
     try:
         store_dir = os.environ['HOME'] + '\\Pictures\\apod\\'# default win32 save dir
@@ -292,10 +287,8 @@ if os.access(store_file, os.F_OK):
     sys.exit(4)
     
 
-# save the file
+# copy the file
 shutil.copyfile(temp_filename,store_file)
-#with open(store_file, 'wb+') as image_f:
-#    image_f.write(temp_f.read())
     
 # wew survived the gauntlet!
 print 'finished!'
