@@ -207,9 +207,9 @@ if not os.path.exists(directory):
 
 image_name        = None                                      # image name
 try:
-    temp_f        = os.tmpfile()                              # temp file
-    temp_filename = temp_f.name                               # temp filename
-except OSError:
+#    temp_f        = os.tmpfile()                              # temp file
+#    temp_filename = temp_f.name                               # temp filename
+#except OSError:
     import tempfile
     temp_filename = tempfile.mkstemp()[1]                     # temp filename 
     temp_f        = open(temp_filename,'r+b')                  # temp file
