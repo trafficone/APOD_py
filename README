@@ -10,7 +10,7 @@ messages to stderr.
 PRE-REQUISITES:
 - python and the following python modules:
     - argparse
-	- shutil
+    - shutil
     - OS X: appscript
     - GNOME: gconf
 
