@@ -17,6 +17,8 @@ import os
 import re
 import sys
 import urllib2
+import shutil
+
 
 ########################
 # function definitions #
@@ -29,7 +31,7 @@ def url_open(url_str):
     """
 
     try:
-        url	= urllib2.urlopen(url_str)
+        url    = urllib2.urlopen(url_str)
 
     # something went wrong with the webserver
     except urllib2.HTTPError, e:
@@ -38,7 +40,7 @@ def url_open(url_str):
         sys.exit(2)
 
     else:
-        page 	= url.read()
+        page     = url.read()
 
     return page
 
@@ -50,12 +52,28 @@ def set_background(image_path):
     supported. 
         - I don't have any windows systems to use / test the code on
         - there are too many possible choices for linux desktop systems and
-          therefore too many desktop-setting mechanisms.
+        therefore too many desktop-setting mechanisms.
     """
     platform = sys.platform
     err      = sys.stderr.write
+    print "I am setting the wallpaper!"
+    if "win32" == platform:
+        try:
+            import ctypes
+            SPI_SETDESKWALLPAPER = 20
+            ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, image_path , 0)
+        except ImportError:
+            err('could not import win32api, win32con, or win32gui')
+            err('please ensure win32all is installed.\n')
+            return False
+        except:
+            err('error setting wallpaper!')
+            return False
+        else:
+            return True
+        
 
-    if "darwin" == platform:
+    elif "darwin" == platform:
         try:
             from appscript import app, mactypes
             app('Finder').desktop_picture.set(mactypes.File(image_path))
@@ -85,7 +103,7 @@ def set_background(image_path):
         desktops = {
                     'gnome': { 'process':'gnome-session' },
                     'fluxbox': { 'process':'fluxbox' }
-                   }
+                }
         for desktop in desktops:
             ret_val = os.system(deskenv % desktops[desktop]['process'])
             if ret_val == 0: break
@@ -180,9 +198,29 @@ base_img    = '.+/(\\w+)\\.([a-z]{3,4})'
 #             form $1 + '_date' + $2 where date is in the form yyyymmdd.
 # temp_f: file descriptor for the temporary file the image is download as
 #         the file is later moved to store_dir/image_name
-store_dir = os.environ['HOME'] + '/Pictures/apod/'      # default save dir
-image_name  = None                                      # image name
-temp_f      = os.tmpfile()                              # temp file
+if 'win32' == sys.platform:
+    try:
+        store_dir = os.environ['HOME'] + '\\Pictures\\apod\\'# default win32 save dir
+    except KeyError:
+        store_dir = os.environ['HOMEPATH'] + '\\Pictures\\apod\\'# failover win32 save dir
+else:
+    store_dir = os.environ['HOME'] + '/Pictures/apod/'      # default save dir
+#ensure directory exists
+directory = os.path.dirname(store_dir)
+if not os.path.exists(directory):
+    os.makedirs(directory)
+
+image_name        = None                                      # image name
+try:
+    temp_f        = os.tmpfile()                              # temp file
+    temp_filename = temp_f.name                               # temp filename
+except OSError:
+    import tempfile
+    temp_filename = tempfile.mkstemp()[1]                     # temp filename 
+    temp_f        = open(temp_filename,'r+b')                  # temp file
+except:
+    sys.stderr.write('Cannot make temp file')
+    sys.exit(5)
 
 ######################
 # miscellaneous vars #
@@ -196,7 +234,7 @@ today       = '_' + str(datetime.date.today()).replace('-', '')
 
 # parse arguments
 parser = argparse.ArgumentParser(description='wee little python script'  +
-                                 'to grab NASA\'s APOD')
+                                'to grab NASA\'s APOD')
 parser.add_argument('-s', '--set', action = 'store_true', help = 'flag ' +
                     'to cause the script to set the desktop background ' +
                     'to the downloaded image.')
@@ -225,7 +263,7 @@ page    = url_open(base_url + 'astropix.html').split('\n')
 
 # hunt down the APOD
 for line in page:
-    match 	    = re.search(apod_img, line, re.I)
+    match         = re.search(apod_img, line, re.I)
     if match:
         image_url   = base_url + match.group(1)
         match2      = re.match(base_img, match.group(1), re.I)
@@ -240,7 +278,7 @@ if not image_url:
 # save the image to a temporary file
 print 'fetching ' + image_url
 temp_f.write(url_open(image_url))
-temp_f.seek(0)
+temp_f.close()
 
 store_file  = store_dir + image_name
 
@@ -255,9 +293,10 @@ if os.access(store_file, os.F_OK):
     
 
 # save the file
-with open(store_file, 'wb+') as image_f:
-    image_f.write(temp_f.read())
-
+shutil.copyfile(temp_filename,store_file)
+#with open(store_file, 'wb+') as image_f:
+#    image_f.write(temp_f.read())
+    
 # wew survived the gauntlet!
 print 'finished!'
 

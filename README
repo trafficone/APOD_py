@@ -10,6 +10,7 @@ messages to stderr.
 PRE-REQUISITES:
 - python and the following python modules:
     - argparse
+	- shutil
     - OS X: appscript
     - GNOME: gconf
 
@@ -58,11 +59,11 @@ SYSTEMS WHERE BACKGROUND SETTING IS IMPLEMENTED:
     - OS X
     - GNOME
     - fluxbox (via fbsetbg or Esetroot, prefers Esetroot)
-
+    - win32
+	
     PLANNED:
     - awesomewm
 
     DO NOT PLAN TO SUPPORT (i.e. do it yourself):
-    - win32
     - kde
 
