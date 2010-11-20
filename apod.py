@@ -63,7 +63,7 @@ def set_background(image_path):
             SPI_SETDESKWALLPAPER = 20
             ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, image_path , 0)
         except ImportError:
-            err('could not import win32api, win32con, or win32gui')
+            err('could not import ctypes')
             err('please ensure win32all is installed.\n')
             return False
         except:
