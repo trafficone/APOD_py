@@ -55,13 +55,20 @@ def set_background(image_path):
         try:
             import ctypes
             SPI_SETDESKWALLPAPER = 20
-            ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, image_path , 0)
+            if(ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, image_path, 0)!=0):
+                return True
+            else:
+                import Image
+                Image.open(image_path).save(image_path+'.bmp')
+                if(ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, image_path+'.bmp', 0)==0):
+                    err('could not set wallpaper!\n')
+                    return False
         except ImportError:
             err('could not import ctypes')
             err('please ensure win32all is installed.\n')
             return False
         except:
-            err('error setting wallpaper!')
+            err('error setting wallpaper!\n')
             return False
         else:
             return True
@@ -190,37 +197,26 @@ base_img    = '.+/(\\w+)\\.([a-z]{3,4})'
 # store_dir: where file should be saved
 # image_name: the name of the image; taken from the base_img regex in the
 #             form $1 + '_date' + $2 where date is in the form yyyymmdd.
-# temp_f: file descriptor for the temporary file the image is download as
-#         the file is later moved to store_dir/image_name
-# temp_filename: file name of the temporary file - used when copying out
-if 'win32' == sys.platform:
-    try:
-        store_dir = os.environ['HOME'] + '\\Pictures\\apod\\'# default win32 save dir
-    except KeyError:
-        store_dir = os.environ['HOMEPATH'] + '\\Pictures\\apod\\'# failover win32 save dir
-else:
-    store_dir = os.environ['HOME'] + '/Pictures/apod/'      # default save dir
-#ensure directory exists
-directory = os.path.dirname(store_dir)
-if not os.path.exists(directory):
-    os.makedirs(directory)
-
-image_name        = None                                      # image name
+# temp: file descriptor for the temporary file the image is download as
+#       the file is later moved to store_dir/image_name. Note that this
+#       has two elements: temp[0] is the file descriptor, temp[1] is the
+#       pathname.
 try:
-#    temp_f        = os.tmpfile()                              # temp file
-#    temp_filename = temp_f.name                               # temp filename
-#except OSError:
-    import tempfile
-    temp_filename = tempfile.mkstemp()[1]                     # temp filename 
-    temp_f        = open(temp_filename,'r+b')                  # temp file
-except:
-    sys.stderr.write('Cannot make temp file')
-    sys.exit(5)
+    store_dir = os.environ['HOME'] + '/Pictures/apod/'      # default save dir
+except KeyError:
+    store_dir = os.environ['HOMEPATH'] + '/Pictures/apod/'      # backup save dir
+import tempfile
+image_name  = None                                      # image name
+temp        = tempfile.mkstemp()                        # temp file
 
 ######################
 # miscellaneous vars #
 ######################
+# today: the date in a string format appropriate for appending to the 
+#        image filename.
+# image_size: number of bytes written
 today       = '_' + str(datetime.date.today()).replace('-', '')
+image_size  = 0
 
 
 ########################
@@ -229,12 +225,16 @@ today       = '_' + str(datetime.date.today()).replace('-', '')
 
 # parse arguments
 parser = argparse.ArgumentParser(description='wee little python script'  +
-                                'to grab NASA\'s APOD')
+                                 ' to grab NASA\'s APOD')
 parser.add_argument('-s', '--set', action = 'store_true', help = 'flag ' +
                     'to cause the script to set the desktop background ' +
                     'to the downloaded image.')
 parser.add_argument('-p', '--path', help = 'path to store downloaded '   +
                     'images in')
+parser.add_argument('-f', '--force', help='force setting background, '   +
+                    'even if image exists already', action = 'store_true')
+parser.add_argument('-o', '--overwrite', help='overwrite existing image',
+                    action='store_true')
 args = parser.parse_args()
 
 # check to see if both a directory to store files in was specified and
@@ -244,21 +244,20 @@ if hasattr(args, 'path') and args.path:
         store_dir = args.path
         if not store_dir[-1] == '/':
             store_dir += '/'
-    else:
-        sys.stderr.write('could not access ' + args.path)
-        sys.stderr.write(' - falling back to ' + store_dir + '\n')
 
 # ensure we have access to the directory we are trying to store images in
+# if not, mkdir()
 if not os.access(store_dir, os.F_OK):
-    sys.stderr.write('no write permissions on ' + store_dir + '!\n')
-    sys.exit(-1)
+    print 'no write permissions on ' + store_dir + '!'
+    print 'creating ' + store_dir
+    os.mkdir(store_dir)
 
 # fetch page
 page    = url_open(base_url + 'astropix.html').split('\n')
 
 # hunt down the APOD
 for line in page:
-    match         = re.search(apod_img, line, re.I)
+    match 	    = re.search(apod_img, line, re.I)
     if match:
         image_url   = base_url + match.group(1)
         match2      = re.match(base_img, match.group(1), re.I)
@@ -270,28 +269,42 @@ if not image_url:
     sys.stderr.write('error retrieving APOD filename!\n')
     sys.exit(3)
 
-# save the image to a temporary file
-print 'fetching ' + image_url
-temp_f.write(url_open(image_url))
-temp_f.close()
-
+# filename to save image as
 store_file  = store_dir + image_name
 
-# diagnostic information
-print 'will store as ' + store_dir + image_name
-
 # note the default behaviour is that in the event the file already exists,
-# assume the file should die. 
-if os.access(store_file, os.F_OK):
+# we won't download the image. If the force option is specified, the 
+# program will try to set the background.
+if os.access(store_file, os.F_OK)and not args.overwrite:
     print 'file already exists!'
-    sys.exit(4)
-    
 
-# copy the file
-shutil.copyfile(temp_filename,store_file)
+    if not args.force:
+        sys.exit(4)
+
+elif not os.access(store_file, os.F_OK):
+    # save the image to a temporary file
+    print 'fetching ' + image_url
+    image_size = os.write(temp[0], url_open(image_url))
+
+    # need to seek to beginning of file to read out the image to the 
+    # actual file.
+    os.lseek(temp[0], 0, os.SEEK_SET)
+
+
+    # diagnostic information
+    print 'will store as ' + store_dir + image_name
     
-# wew survived the gauntlet!
-print 'finished!'
+    # save the file
+    #with open(store_file, 'wb+') as image_f:
+    #    image_f.write(os.read(temp[0], image_size))
+    image_f = open(store_file, 'wb+')
+    image_f.write(os.read(temp[0], image_size))
+    print 'download complete!'
+
+    # clean up the temp file
+    u_path  = temp[1]
+    os.close(temp[0])
+    os.unlink(u_path)
 
 # possibly set the background 
 if args.set:
@@ -301,4 +314,5 @@ if args.set:
     else:
         print 'success!'
 
-
+# wew survived the gauntlet!
+print 'finished!'
